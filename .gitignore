@@ -1,0 +1,6 @@
+/media/video/
+/dnn
+/.idea
+*.mp4
+*.pyc
+*.weights
