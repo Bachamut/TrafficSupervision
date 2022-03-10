@@ -8,7 +8,7 @@ class Entity:
     def __init__(self, box, class_id=None, entity_id=None, score=None):
 
         self.entity_id = entity_id
-        self.box = box
+        self.box = None
         self.class_id = class_id
         self.score = score
         self.last_detected: int = 0
@@ -16,8 +16,9 @@ class Entity:
         self.position_history = None
         self.entity_id_history = list()
         self.predicted_position = None
-
         self.confidence_history = dict()
+
+        self.attach_box(box)
 
     def update_confidence_history(self, frame_number, class_id, score):
 
@@ -27,7 +28,7 @@ class Entity:
 
         if not self.has_box():
             self.box = box
-            box.related_entity = self.entity_id
+            box.related_entity = self
 
     def has_box(self):
 

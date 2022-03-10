@@ -21,7 +21,10 @@ class EntityHandler:
     def distance_between(box, entity):
 
         fcx, fcy = box.get_center_coordinates()
-        scx, scy = entity.box.get_center_coordinates()
+        if entity.predicted_position is not None:
+            scx, scy = entity.predicted_position
+        else:
+            scx, scy = entity.box.get_center_coordinates()
 
         distance = ((((scx - fcx) ** 2) + ((scy - fcy) ** 2)) ** 0.5)
 
@@ -45,7 +48,7 @@ class EntityHandler:
     @staticmethod
     def predict_entity_next_position(entity):
 
-        if len(entity.position_history.position_history) > 1:
+        if entity.position_history.position_history.ndim >= 2:
             last_position = np.array(entity.position_history.position_history[-2, 1])
             current_position = np.array(entity.position_history.position_history[-1, 1])
             displacement_vector = current_position - last_position

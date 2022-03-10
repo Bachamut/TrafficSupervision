@@ -40,7 +40,7 @@ class MediaReader:
                 if entity is None or self.frame_number == 1:
                     obj_id = self.id_handler.create_next_id(self.frame_number)
                     entity = Entity(box, class_id, obj_id)
-                    entity.attach_box(box)
+                    # entity.attach_box(box)
                     entity.box.color = (0, 255, 0)
                     entity.box.label = box.create_label()
 
@@ -71,13 +71,13 @@ class MediaReader:
             if self.frame_number > 2:
                 for entity in self.entity_handler.tracked_entity:
                     entity.predicted_position = EntityHandler.predict_entity_next_position(entity)
-                    cv2.circle(frame, entity.center_position, 2, (0, 255, 0 ), 1)
+                    cv2.circle(frame, entity.center_position, 2, (0, 255, 0), 1)
                     if entity.predicted_position is not None:
                         cv2.circle(frame, entity.predicted_position, 2, (0, 0, 255), 1)
 
             cv2.imshow("Frame", frame)
 
-            key = cv2.waitKey(1)
+            key = cv2.waitKey(0)
             if key == 27:
                 break
 
