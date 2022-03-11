@@ -22,3 +22,7 @@ def create_text_label(frame, text, cx, cy):
     cv2.putText(frame, text, (cx, cy), 0, 0.5, (0, 0, 255), 1)
 
 
+def display_frame_number(frame, frame_number):
+    cv2.putText(frame, ("Frame No." + str(frame_number)), (30, 30), 0, 0.5, (0, 0, 255), 1)
+
+
