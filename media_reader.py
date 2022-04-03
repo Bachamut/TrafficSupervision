@@ -1,9 +1,12 @@
 import cv2
+import numpy as np
 
 import frame_content
 from background_subtractor import BackgroundSubtractor
 from box import Box
-from object_detection import ObjectDetection
+from contour_detector import ContourDetector
+from frame_preparation import FramePreparation
+from dnn_detector import DnnDetector
 from entity import Entity
 from id_handler import IdHandler
 from entity_handler import EntityHandler
@@ -17,14 +20,14 @@ class MediaReader:
         self.media = cv2.VideoCapture(media_dir)
         self.frame_number = 1
 
-        self.object_detection = ObjectDetection()
+        self.dnn_detector = DnnDetector()
+        self.contour_detector = ContourDetector()
         self.entity_handler = EntityHandler()
         self.id_handler = IdHandler()
+        self.frame_preparation = FramePreparation()
         self.background_subtractor = BackgroundSubtractor()
 
-        self.background = self.background_subtractor.create_background()
-
-        # self.background = cv2.createBackgroundSubtractorMOG2(history=100, varThreshold=40, detectShadows=True)
+        self.background = self.background_subtractor.subtract_background()
 
         self.height = self.media.get(cv2.CAP_PROP_FRAME_HEIGHT)
         self.width = self.media.get(cv2.CAP_PROP_FRAME_WIDTH)
@@ -35,36 +38,50 @@ class MediaReader:
             ret, frame = self.media.read()
             if not ret:
                 break
-            blur = cv2.GaussianBlur(frame, (1, 3), cv2.BORDER_DEFAULT)
-            cv2.imshow('Blur', blur)
-            roi = frame[0:int(self.height), 0:int(self.width)]
-            blur = blur[0:int(self.height), 0:int(self.width)]
-            background_mask = self.background.apply(blur)
 
-            _, background_thresh = cv2.threshold(background_mask, 180, 255, cv2.THRESH_BINARY)
+            frame = cv2.resize(frame, (0, 0), None, .5, .5)
+            clear_frame = frame.copy()
+            dnn_frame = frame.copy()
 
-            contours, _ = cv2.findContours(background_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-            detections = list()
+            roi = frame.copy()[0:int(self.height), 0:int(self.width)]
 
-            for cnt in contours:
-                # Calculate area and remove small objects
-                area = cv2.contourArea(cnt)
-                if area > 400:
-                    cv2.drawContours(roi, [cnt], -1, (0, 255, 0), 2)
-                    x, y, w, h = cv2.boundingRect(cnt)
-                    cv2.rectangle(roi, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                    detections.append([x, y, w, h])
+            frame = self.frame_preparation.convert_grayscale(frame)
+            # frame = self.frame_preparation.apply_blur(frame)
 
+            background_mask = self.background.apply(frame)
+            _, background_thresh = self.frame_preparation.apply_threshold(background_mask)
+
+            detections = self.contour_detector.detect_contours(background_thresh, roi)
+
+            detection_rectangles = list()
+            rectangles_mask = np.zeros(frame.shape[:2], dtype='uint8')
             for rect in detections:
                 x, y, w, h = rect
+                cut_detection = frame[y:y + h, x:x + w]
+                text = f'{x, y, w, h}'
+                print(f'x:{x}, y:{y}, w:{w}, h:{h}')
                 cx = (x + x + w) // 2
                 cy = (y + y + h) // 2
-                cv2.putText(roi, "str(id)", (x, y - 15), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
-                # cv2.rectangle(roi, (x, y), (x + w, y + h), (0, 0, 255), 1)
+                cv2.putText(roi, text, (x, y - 15), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+                cv2.rectangle(roi, (x, y), (x + w, y + h), (0, 0, 255), 1)
 
-            dnn = False
-            if dnn:
-                class_ids, scores, boxes = self.object_detection.detect(frame)
+                blank = np.zeros(frame.shape[:2], dtype='uint8')
+                rectangle = cv2.rectangle(blank.copy(), (x, y), (x + w, y + h), 255, -1)
+                # cv2.imshow("Detection Rectangle", rectangle)
+                detection_rectangles.append(rectangle)
+                rectangles_mask = cv2.add(rectangles_mask, rectangle)
+
+            # cv2.imshow('Rectangles Mask', rectangles_mask)
+            #     cut_detection = cv2.bitwise_and(clear_frame, clear_frame, mask=rectangle)
+            #     cut_detection = cut_detection[y:y+h, x:x+w]
+
+                cv2.imshow('Cut Detection', cut_detection)
+            masked = cv2.bitwise_and(clear_frame, clear_frame, mask=rectangles_mask)
+            cv2.imshow('Masked Frame', masked)
+
+            run_dnn = True
+            if run_dnn:
+                class_ids, scores, boxes = self.dnn_detector.detect(masked)
 
                 for index, class_id in enumerate(class_ids):
                     box_dimension = boxes[index]
@@ -93,10 +110,10 @@ class MediaReader:
 
                         entity.entity_id_history.append(entity.entity_id.number)
 
-                    entity.box.display_border(frame)
-                    entity.box.label.display_border(frame)
-                    entity.box.label.display_title(frame)
-                    entity.display_id(frame)
+                    entity.box.display_border(dnn_frame)
+                    entity.box.label.display_border(dnn_frame)
+                    entity.box.label.display_title(dnn_frame)
+                    entity.display_id(dnn_frame)
                     entity.update_confidence_history(self.frame_number, class_id, score)
 
                     print(f'Frame No.{self.frame_number}|Id:{entity.entity_id.number} ffd({entity.entity_id.date_of_creation}) - {entity.confidence_history[self.frame_number]}')
@@ -113,11 +130,17 @@ class MediaReader:
                             cv2.circle(frame, entity.predicted_position, 2, (0, 0, 255), 1)
 
             frame_content.display_frame_number(frame, self.frame_number)
-            cv2.imshow("Frame", frame)
+            # frame_content.display_frame_number(blur, self.frame_number)
+            # cv2.imshow("Frame", frame)
             cv2.imshow("Background Thresh", background_thresh)
             cv2.imshow("Background Mask", background_mask)
+            # cv2.imshow('Blur', blur)
+            # cv2.imshow('Clear Frame', clear_frame)
+            cv2.imshow('DNN Frame', dnn_frame)
+            cv2.imshow('ROI', roi)
+            # cv2.imshow('Grayscale Frame', grayscale_frame)
 
-            key = cv2.waitKey(0)
+            key = cv2.waitKey(1)
             if key == 27:
                 break
 

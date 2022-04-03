@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 
-class ObjectDetection:
+class DnnDetector:
     def __init__(self, weights_path="dnn/model/yolov4.weights", cfg_path="dnn/model/yolov4.cfg"):
         print("Loading Object Detection")
         print("Running opencv dnn with YOLOv4")
